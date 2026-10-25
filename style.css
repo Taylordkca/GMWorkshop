@@ -127,3 +127,9 @@
 .note-editor-options input{width:auto}
 #noteSidebar .sidebar-actions .primary{background:#d62828;color:white;border-color:#d62828}
 @media(max-width:520px){.gm-note-head{align-items:flex-start;flex-direction:column}.gm-note-actions{width:100%}}
+
+/* Mobile input focus: avoid iOS automatic zoom while preserving user pinch zoom. */
+@media (max-width: 900px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select, textarea { font-size: 16px !important; }
+}

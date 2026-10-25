@@ -133,3 +133,133 @@
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
   select, textarea { font-size: 16px !important; }
 }
+
+/* v0.6.4 Creature Library */
+.creature-library{display:flex;align-items:end;gap:9px;flex-wrap:wrap;padding:0 0 17px;margin-bottom:14px;border-bottom:1px solid #ddd}
+.creature-library>label{font-size:12px;font-weight:700;align-self:center;white-space:nowrap}
+.creature-library select{flex:1 1 230px;min-width:160px;max-width:540px;padding:9px;border:1px solid #777;background:#fafafa;font-size:14px;min-height:39px}
+.creature-library button{padding:10px 12px;font-size:12px;white-space:nowrap}
+.creature-library .library-count{font-size:12px;color:#666;align-self:center;white-space:nowrap}
+@media(max-width:600px){.creature-library select{flex-basis:100%;max-width:none;font-size:16px}.creature-library button{flex:1 1 auto}}
+
+/* v0.7 — Mob Library landing page, matching Character Sheet selection screen */
+.mob-library-screen{min-height:100vh;background:#191919;color:#fff;padding:32px 24px 64px;font-family:Arial,Helvetica,sans-serif}
+.mob-library-content{max-width:1000px;margin:0 auto;text-align:center}
+.mob-library-content>h1{font-size:42px;letter-spacing:.5px;margin:4px 0 14px;color:#fff}
+.mob-library-subtitle{font-size:16px;letter-spacing:3px;color:#c7c7c7;margin:0 0 40px}
+.mob-library-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:18px;text-align:left}
+.mob-library-card,.mob-new-card{min-height:295px;background:#303030;border:2px solid #555;padding:24px;box-sizing:border-box;color:#fff}
+.mob-library-card small{display:block;font-size:12px;color:#fa5358;font-weight:bold;letter-spacing:.5px}
+.mob-library-card h2{font-size:22px;color:#fff;margin:2px 0 15px;overflow-wrap:anywhere}
+.mob-library-card p{font-size:15px;margin:5px 0;color:#eee}
+.mob-library-card button,.mob-library-transfer button{font-weight:bold;border:0;cursor:pointer;color:#fff}
+.mob-open{display:block;width:100%;background:#db2328;padding:13px 8px;margin:25px 0 12px;font-size:12px}
+.mob-card-actions{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.mob-card-actions button{background:#565656;font-size:11px;padding:9px 4px}
+.mob-card-actions .mob-delete{background:#812026}
+.mob-new-card{display:flex;align-items:center;justify-content:center;flex-direction:column;border:2px dashed #777;cursor:pointer;text-align:center;gap:19px;font:inherit}
+.mob-plus{font-size:58px;line-height:1;color:#fa5358}
+.mob-new-card strong{font-size:24px}.mob-new-card>span:last-child{font-size:15px;color:#ddd}
+.mob-library-transfer{display:flex;justify-content:center;flex-wrap:wrap;gap:10px;margin-top:35px}
+.mob-library-transfer button{padding:14px 20px;background:#424242;border:1px solid #666;font-size:12px}
+.mob-library-hint{color:#aaa;font-size:12px;margin-top:18px}
+.back-to-mobs{float:right;background:#292929;color:#fff;border:1px solid #777;padding:10px 14px;font-size:12px;font-weight:bold;cursor:pointer}
+.mob-library-card button:hover,.mob-library-transfer button:hover,.mob-new-card:hover{filter:brightness(1.17)}
+@media(max-width:600px){.mob-library-screen{padding:25px 16px}.mob-library-content>h1{font-size:30px}.mob-library-subtitle{font-size:12px;margin-bottom:25px}.mob-library-cards{grid-template-columns:1fr}.back-to-mobs{float:none;display:block;margin-bottom:12px}}
+
+/* v0.7.1 — Character Sheet-inspired grey canvas and white sheet */
+#workshopView{background:#eee;min-height:100vh}
+#workshopView > header{background:#111;border-bottom:5px solid #d62828}
+#workshopView > header .wrap{max-width:1180px}
+#workshopView .back-to-mobs{float:none;display:block;margin:0 0 14px;background:#242424;color:#fff;border:1px solid #666;padding:9px 14px;font-size:12px}
+#workshopView > main.wrap{max-width:1180px;margin:24px auto 40px;background:#fff;padding:24px!important;box-shadow:0 1px 3px #00000012}
+#workshopView main.wrap > section.panel{background:#fff;box-shadow:none;border:0;padding:0;margin:0 0 17px}
+#workshopView main.wrap > section.panel > .section-title{margin:0 0 12px;padding:9px 12px;min-height:39px;background:#111}
+#workshopView main.wrap > section.panel > .workshop-section-body{padding:0 0 6px}
+#workshopView main.wrap > section.panel.is-collapsed > .section-title{margin-bottom:0}
+#workshopView .section-title{justify-content:flex-start}
+#workshopView .section-title .section-move-buttons{margin-left:auto}
+#workshopView .section-title .header-actions{margin-left:8px}
+#workshopView .section-title .section-move-buttons button{border:1px solid #aaa;padding:5px 8px}
+@media(max-width:700px){
+ #workshopView > main.wrap{margin:10px auto;padding:12px!important}
+ #workshopView .section-title{gap:6px}
+ #workshopView .section-title .header-actions{margin-left:0}
+}
+
+/* v0.7.2 — Character Sheet visual alignment */
+#workshopView .workshop-topnav{background:#eee;padding:12px max(12px,calc((100vw - 1180px)/2));min-height:66px}
+#workshopView .workshop-topnav .back-to-mobs{float:none;display:inline-block;margin:0;background:#1b1b1b;color:#fff;border:0;padding:13px 20px;font-size:12px;font-weight:700}
+#workshopView > header{padding:16px 0 17px}
+#workshopView > header .wrap{max-width:none;padding:0 20px}
+#workshopView > header h1{font-size:30px;margin:2px 0}
+#workshopView > main.wrap{max-width:1200px}
+#workshopView .creature-profile{display:grid;grid-template-columns:160px minmax(0,1fr);gap:18px;align-items:start}
+#workshopView .creature-photo-column{min-width:0}
+#workshopView .creature-photo-frame{width:100%;aspect-ratio:1/1;border:2px solid #222;background:#ededed;display:flex;align-items:center;justify-content:center;overflow:hidden}
+#workshopView .creature-photo-frame img{width:100%;height:100%;object-fit:cover}
+#workshopView .creature-photo-frame img[hidden],#workshopView .creature-photo-frame span[hidden]{display:none}
+#workshopView #creaturePhotoPlaceholder{font-size:12px;color:#777;font-weight:700}
+#workshopView .creature-photo-column button{display:block;width:100%;font-size:11px;font-weight:700;padding:8px 4px;margin-top:5px;cursor:pointer}
+#workshopView .photo-upload{background:#191919;color:white;border:0}
+#workshopView .photo-remove{background:#eee;border:1px solid #bbb;color:#111}
+#workshopView .photo-remove:disabled{opacity:.45}
+#workshopView .creature-profile-main{min-width:0}
+#workshopView .creature-profile .summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:14px}
+#workshopView .creature-profile .summary>div{min-width:0;padding:12px;border-radius:0}
+#workshopView .creature-profile .summary strong{font-size:21px;overflow-wrap:anywhere}
+#workshopView .creature-profile .summary .summary-note{font-size:11px}
+#workshopView main.wrap > section.panel > .section-title{gap:9px;display:flex}
+#workshopView main.wrap > section.panel > .section-title h2{flex:0 0 auto;font-size:17px}
+#workshopView .section-title .header-actions{margin-left:auto;display:flex;align-items:center;gap:6px}
+#workshopView .section-title .section-move-buttons{margin-left:auto;display:flex;align-items:center;gap:5px;flex:0 0 auto}
+#workshopView .section-title .header-actions + .section-move-buttons{margin-left:10px}
+#workshopView .section-title .header-actions button{font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;min-height:34px;padding:8px 12px}
+#workshopView .section-title .section-move-buttons button{font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:700;min-height:30px;padding:5px 8px;background:white;color:#111;border:1px solid #aaa}
+#workshopView .section-title .section-move-buttons button:last-child{font-size:12px;padding:5px 10px;white-space:nowrap;border:1px solid #111}
+#workshopView .section-title .section-move-buttons button:disabled{background:#555;color:#222;cursor:default}
+@media(max-width:900px){
+ #workshopView .creature-profile .summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:600px){
+ #workshopView .creature-profile{grid-template-columns:100px minmax(0,1fr);gap:10px}
+ #workshopView .creature-profile .summary{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #workshopView .section-title{flex-wrap:wrap}
+ #workshopView .section-title .header-actions{margin-left:0}
+ #workshopView .section-title .section-move-buttons{margin-left:auto}
+ #workshopView .section-title .header-actions + .section-move-buttons{margin-left:auto}
+ #workshopView .section-title .header-actions button{font-size:11px;padding:7px}
+}
+
+/* v0.7.3 — stronger health affordance and Character Sheet note controls */
+#workshopView .health-bar-shell{position:relative;display:flex;align-items:center;gap:9px;background:#f2f2f2;border:1px solid #888;padding:5px 9px}
+#workshopView .health-bar-shell .health-blocks{flex:1;border:1px solid #777;height:31px}
+#workshopView .health-bar-icon{font-size:27px;color:#d62828;line-height:1;flex:0 0 auto}
+#workshopView .health-bar-text{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:none;color:#111;font-size:12px;font-weight:900;letter-spacing:2px;text-shadow:0 1px 1px #fff,0 -1px 1px #fff}
+#workshopView .gm-note-actions{display:flex;gap:8px;flex-wrap:wrap}
+#workshopView .gm-note-actions button{font-size:12px;font-weight:700;padding:8px 12px;border:2px solid #222;background:#fff;color:#111}
+#workshopView .gm-note-actions button.note-edit{background:#d62828;color:#fff;border-color:#222}
+#workshopView .gm-note-actions button.note-delete{color:#d62828}
+#workshopView .gm-note-actions button:hover{background:#eee}
+#workshopView .gm-note-actions button.note-edit:hover{background:#b91d24}
+#workshopView #saveStatus[hidden]{display:none}
+
+/* v0.7.4: clean segmented health bar — one divider per HB */
+#workshopView .health-bar-shell{padding:5px 9px;background:#f2f2f2}
+#workshopView .health-bar-shell .health-blocks{height:34px}
+#workshopView .health-tick{width:1px;background:rgba(30,30,30,.35)}
+
+/* v0.7.5 — inline note creation, read-first note sidebar, unified entry button */
+#quickNoteForm[hidden],#noteEditor[hidden],#noteReadView[hidden]{display:none!important}
+.quick-note-form{border:2px solid #222;padding:18px;margin:14px 0;background:#f8f8f8;display:flex;flex-direction:column;gap:12px}
+.quick-note-form h3{margin:0;font-size:17px}
+.quick-note-form label{display:flex;flex-direction:column;gap:5px;font-weight:700;font-size:12px}
+.quick-note-form input,.quick-note-form textarea{font-size:16px;width:100%;box-sizing:border-box}
+.quick-note-actions{display:flex;gap:8px}.quick-note-actions button{font-weight:700}
+.note-read-body{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5;min-height:65px;margin:14px 0 24px}
+.sidebar-note-actions{display:flex;gap:8px;flex-wrap:wrap}
+#workshopView .sidebar-note-actions button{font-size:12px;font-weight:700;padding:8px 12px;border:2px solid #222;background:#fff;color:#111}
+#workshopView .sidebar-note-actions button.note-edit{background:#d62828;color:#fff}
+#workshopView .sidebar-note-actions button.note-delete{color:#d62828}
+.entry-kind{margin-bottom:16px}.entry-kind label{display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:12px}
+.entry-kind select{font-size:16px}

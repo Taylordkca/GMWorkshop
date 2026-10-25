@@ -1,5 +1,6 @@
 'use strict';
 const KEY='jackalforgeGMWorkshopV1';
+const LIBRARY_KEY='jackalforgeGMCreatureLibraryV1';
 const names=['STR','INT','CON','DEX','CHA'];
 const DAMAGE_TYPES=['Acid','Bludgeoning','Electric','Fire','Force','Holy','Ice','Necrotic','Piercing','Poison','Psychic','Slashing','Sonic'];
 const costs=[0,1,3,6,10,20,50,100,150,200,300];
@@ -17,10 +18,75 @@ const defaultDie=tier=>tier==='weak'?'d4':tier==='standard'?'d6':'d8';
 const suggestedLevels={1:[2,3,4],2:[6,7,9],3:[12,15,18],4:[22,25,28],5:[32,35,38],6:[42,45,48],7:[52,55,58],8:[62,65,68],9:[72,75,78],10:[92,95,98],11:[112,115,118],12:[132,135,138],13:[152,155,158],14:[172,175,178],15:[192,195,198],16:[212,215,218],17:[250,260,270],18:[270,280,300]};
 function recommendedLevel(tier,f){const row=suggestedLevels[f]||suggestedLevels[1];if(tier==='weak')return row[0];if(tier==='standard')return row[1];if(tier==='neighborhood')return Math.max(10,row[2]);if(tier==='borough')return Math.max(15,row[2]);const mins={city:30,province:80,country:250,floorboss:300};return Math.max(mins[tier]||0,row[2])}
 
-const make=()=>({name:'',floor:1,level:3,tier:'standard',mode:'mods',preset:'balanced',mods:[1,1,1,1,1],points:[1,1,1,1,1],locks:[false,false,false,false,false],maxHB:6,currentHB:6,dr:0,die:'d6',conThreshold:null,resistances:[],vulnerabilities:[],attacks:[],abilities:[],sheetLayout:{order:[],collapsed:[]},notes:'',gmNotes:[]});
+const make=()=>({photo:'',name:'',floor:1,level:3,tier:'standard',mode:'mods',preset:'balanced',mods:[1,1,1,1,1],points:[1,1,1,1,1],locks:[false,false,false,false,false],maxHB:6,currentHB:6,dr:0,die:'d6',conThreshold:null,resistances:[],vulnerabilities:[],attacks:[],abilities:[],sheetLayout:{order:[],collapsed:[]},notes:'',gmNotes:[]});
 let mob=make(),undo=[];
 let hitComponents=[{type:'',damage:'',modifier:'auto'}];
-try{const saved=JSON.parse(localStorage.getItem(KEY));if(saved&&typeof saved==='object')mob={...make(),...saved}}catch(e){console.warn('Save not loaded',e)}
+// Creature Library: migrate the original single-creature save without losing it.
+const newCreatureId=()=>typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():'creature-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+let library={activeId:null,creatures:[]};
+try{
+ const stored=JSON.parse(localStorage.getItem(LIBRARY_KEY));
+ if(stored&&Array.isArray(stored.creatures))library=stored;
+}catch(e){console.warn('Creature library could not be read',e)}
+if(!library.creatures.length){
+ let previous=null;
+ try{previous=JSON.parse(localStorage.getItem(KEY))}catch(e){console.warn('Legacy creature save unavailable',e)}
+ const id=newCreatureId();
+ library={activeId:id,creatures:[{id,data:{...make(),...(previous&&typeof previous==='object'?previous:{})}}]};
+ try{localStorage.setItem(LIBRARY_KEY,JSON.stringify(library))}catch(e){console.warn('Creature library migration could not be saved',e)}
+}
+if(!library.creatures.some(x=>x.id===library.activeId))library.activeId=library.creatures[0].id;
+mob={...make(),...(library.creatures.find(x=>x.id===library.activeId)?.data||{})};
+const TIER_NAMES={weak:'Weak Mob',standard:'Standard Mob',elite:'Elite',neighborhood:'Neighborhood Boss',borough:'Borough Boss',city:'City Boss',province:'Province Boss',country:'Country Boss',floorboss:'Floor Boss'};
+function downloadCreature(data){
+ const blob=new Blob([JSON.stringify({app:'jackalforge-gm-workshop',version:1,creature:data},null,2)],{type:'application/json'});
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(data.name?.trim().replace(/[^a-z0-9-]/gi,'-')||'creature')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function showMobLibrary(){save();$('workshopView').hidden=true;$('mobLibraryScreen').hidden=false;renderMobLibrary();window.scrollTo(0,0)}
+function showWorkshop(){ $('mobLibraryScreen').hidden=true;$('workshopView').hidden=false;render();restoreWorkshopLayout();window.scrollTo(0,0)}
+function renderMobLibrary(){
+ const host=$('mobLibraryCards');if(!host)return;host.replaceChildren();
+ for(const entry of library.creatures){
+  const d=entry.data||{};
+  const card=document.createElement('article');card.className='mob-library-card';
+  const tag=document.createElement('small');tag.textContent='CREATURE PROFILE';
+  const title=document.createElement('h2');title.textContent=d.name?.trim()||'Unnamed Creature';
+  const details=document.createElement('p');details.textContent=`Level ${d.level||1} · ${TIER_NAMES[d.tier]||'Creature'}`;
+  const floor=document.createElement('p');floor.textContent=`Floor ${d.floor||1}`;
+  const open=document.createElement('button');open.type='button';open.className='mob-open';open.textContent='OPEN CREATURE';open.addEventListener('click',()=>{switchCreature(entry.id);showWorkshop()});
+  const actions=document.createElement('div');actions.className='mob-card-actions';
+  function action(label,handler,cls=''){const b=document.createElement('button');b.type='button';b.textContent=label;if(cls)b.className=cls;b.addEventListener('click',handler);actions.append(b)}
+  action('RENAME',()=>{const next=prompt('Creature name:',d.name||'');if(next===null)return;entry.data.name=next.trim();if(entry.id===library.activeId)mob.name=next.trim();save();renderMobLibrary()});
+  action('DUPLICATE',()=>{const copy=JSON.parse(JSON.stringify(entry.data));copy.name=(copy.name?.trim()||'Unnamed Creature')+' (Copy)';addCreature(copy);showMobLibrary()});
+  action('EXPORT',()=>downloadCreature(entry.data));
+  action('DELETE',()=>{if(!confirm(`Delete ${d.name?.trim()||'this creature'}? This cannot be undone.`))return;
+   library.creatures=library.creatures.filter(x=>x.id!==entry.id);
+   if(library.activeId===entry.id){library.activeId=library.creatures[0]?.id||null;mob=library.creatures.length?{...make(),...library.creatures[0].data}:make()}
+   save();renderMobLibrary();},'mob-delete');
+  card.append(tag,title,details,floor,open,actions);host.append(card);
+ }
+ const create=document.createElement('button');create.type='button';create.className='mob-new-card';
+ const plus=document.createElement('span');plus.className='mob-plus';plus.textContent='+';
+ const title=document.createElement('strong');title.textContent='NEW CREATURE';
+ const sub=document.createElement('span');sub.textContent='Create a fresh mob or boss.';
+ create.append(plus,title,sub);create.addEventListener('click',()=>{createNewCreature();showWorkshop()});host.append(create);
+}
+function switchCreature(id){
+ if(id===library.activeId)return;
+ const entry=library.creatures.find(x=>x.id===id);if(!entry)return;
+ save();library.activeId=id;mob={...make(),...entry.data};undo=[];
+ hitComponents=[{type:'',damage:'',modifier:'auto'}];
+ $('bypass').value=0;$('ignoreDR').checked=false;
+ render();restoreWorkshopLayout();renderMobLibrary();
+}
+function addCreature(data){
+ save();const id=newCreatureId();
+ library.creatures.push({id,data:{...make(),...(data||{})}});
+ library.activeId=id;mob={...make(),...(data||{})};undo=[];
+ hitComponents=[{type:'',damage:'',modifier:'auto'}];
+ $('bypass').value=0;$('ignoreDR').checked=false;
+ render();restoreWorkshopLayout();renderMobLibrary();
+}
 function budget(){return mob.mode==='points'?mob.level*3:tierBudget(mob.tier,mob.floor)}
 function spent(){return mob.mode==='points'?mob.points.reduce((s,p)=>s+p-1,0):mob.mods.reduce((s,m)=>s+costs[m],0)}
 // Allocate ONLY the unlocked stats. Locked values are never reset or reduced.
@@ -92,7 +158,14 @@ function fillArray(preset=mob.preset){
  mob.mods=next;return true;
 }
 function rebalance(){const cap=budget();let over=spent()-cap;while(over>0){const options=mob.mods.map((m,i)=>({m,i})).filter(x=>x.m>1&&!mob.locks[x.i]);if(!options.length)break;options.sort((a,b)=>b.m-a.m);mob.mods[options[0].i]--;over=spent()-cap}}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(mob));$('saveStatus').textContent='Saved locally'}catch(e){$('saveStatus').textContent='Save unavailable'}}
+function save(){try{
+ const entry=library.creatures.find(x=>x.id===library.activeId);
+ if(entry)entry.data=JSON.parse(JSON.stringify(mob));
+ localStorage.setItem(LIBRARY_KEY,JSON.stringify(library));
+ // Preserve the old key as a compatibility copy of the active creature.
+ localStorage.setItem(KEY,JSON.stringify(mob));
+ $('saveStatus').textContent='Saved locally';renderMobLibrary();
+}catch(e){$('saveStatus').textContent='Save unavailable';console.warn('Creature save failed',e)}}
 function setTierDefaults(){mob.maxHB=defaultHB(mob.tier,mob.floor);mob.currentHB=mob.maxHB;mob.dr=defaultDR(mob.tier,mob.floor);mob.die=defaultDie(mob.tier);mob.conThreshold=null}
 function renderStats(){const grid=$('statGrid');grid.replaceChildren();names.forEach((name,i)=>{const card=document.createElement('div');card.className='stat-card';const h=document.createElement('h3');h.textContent=mob.mode==='points'?({STR:'Strength',INT:'Intelligence',CON:'Constitution',DEX:'Dexterity',CHA:'Charisma'})[name]:name;card.append(h);const label=document.createElement('label');label.textContent=mob.mode==='points'?'Points':'Modifier';const inp=document.createElement('input');inp.type='number';inp.min=mob.mode==='points'?-1:1;inp.max=mob.mode==='points'?999:10;inp.value=mob.mode==='points'?mob.points[i]:mob.mods[i];inp.addEventListener('change',()=>{const old=mob.mode==='points'?mob.points[i]:mob.mods[i];const next=clamp(Math.trunc(Number(inp.value)),mob.mode==='points'?-1:1,mob.mode==='points'?999:10);if(mob.mode==='array'){// Array mode preserves the budget and allows redistribution using the same pool.
  mob.mods[i]=next;if(spent()>budget())mob.mods[i]=old;
@@ -114,7 +187,7 @@ function renderHealth(){
  fill.style.width=percent+'%';
  fill.style.background=percent<=0?'#ddd':percent<=20?'#d62828':percent<=50?'#e98a34':percent<80?'#f0d451':'#63a568';
  bar.append(fill);
- for(let mark=10;mark<mob.maxHB;mark+=10){
+ for(let mark=1;mark<mob.maxHB;mark++){
    const tick=document.createElement('span');tick.className='health-tick';tick.style.left=(mark/mob.maxHB*100)+'%';bar.append(tick);
  }
  bar.setAttribute('aria-valuemax',String(mob.maxHB));
@@ -251,7 +324,7 @@ function calc(){
  $('damageExplanation').textContent=`${modified} combined damage − ${dr} DR = ${after} ÷ ${threshold} CON = ${lost} HB lost · ${rem} discarded`;
  return lost;
 }
-function render(){mob.floor=clamp(Math.trunc(mob.floor),1,18);mob.level=Math.max(1,Math.trunc(mob.level));$('name').value=mob.name;$('floor').value=mob.floor;$('level').value=mob.level;$('tier').value=mob.tier;$('mode').value=mob.mode;$('preset').value=mob.preset||'balanced';$('preset').disabled=mob.mode==='points';$('randomize').disabled=mob.mode==='points'||!['balanced','minmax','custom'].includes(mob.preset);$('statReference').disabled=false;$('summaryHealth').textContent=`${mob.maxHB} HB × ${effectiveThreshold()} CON`; $('healthDetail').textContent=`${mob.maxHB} hit boxes · CON threshold ${effectiveThreshold()}`;$('defaultDamage').textContent=diceCount(mob.floor)+mob.die;const mods=getMods();$('evade').textContent=10+mods[3]+mob.floor;$('surprise').textContent=10+mods[1]+mob.floor;renderStats();renderAttacksAndAbilities();renderGMNotes();renderHealth();renderDamageTypes();renderHitDamageType();renderDamageComponents();$('bypass').disabled=$('ignoreDR').checked;calc();save()}
+function render(){renderCreaturePhoto();mob.floor=clamp(Math.trunc(mob.floor),1,18);mob.level=Math.max(1,Math.trunc(mob.level));$('name').value=mob.name;$('floor').value=mob.floor;$('level').value=mob.level;$('tier').value=mob.tier;$('mode').value=mob.mode;$('preset').value=mob.preset||'balanced';$('preset').disabled=mob.mode==='points';$('randomize').disabled=mob.mode==='points'||!['balanced','minmax','custom'].includes(mob.preset);$('statReference').disabled=false;$('summaryHealth').textContent=`${mob.maxHB} HB × ${effectiveThreshold()} CON`; $('healthDetail').textContent=`${mob.maxHB} hit boxes · CON threshold ${effectiveThreshold()}`;$('defaultDamage').textContent=diceCount(mob.floor)+mob.die;const mods=getMods();$('evade').textContent=10+mods[3]+mob.floor;$('surprise').textContent=10+mods[1]+mob.floor;renderStats();renderAttacksAndAbilities();renderGMNotes();renderHealth();renderDamageTypes();renderHitDamageType();renderDamageComponents();$('bypass').disabled=$('ignoreDR').checked;calc();save()}
 function changeFloorOrTier(){mob.level=recommendedLevel(mob.tier,mob.floor);setTierDefaults();if(mob.mode!=='points'){if(!fillArray(mob.preset==='custom'?'balanced':mob.preset))return}undo=[];render()}
 $('name').addEventListener('input',e=>{mob.name=e.target.value;save()});$('floor').addEventListener('change',e=>{mob.floor=clamp(Math.trunc(+e.target.value),1,18);changeFloorOrTier()});$('level').addEventListener('change',e=>{mob.level=Math.max(1,Math.trunc(+e.target.value));if(mob.mode==='points'&&spent()>budget()){alert('Level budget is too low for current RAW stats. Please adjust the stats or increase the level.');mob.level=+$('level').defaultValue||1}render()});$('tier').addEventListener('change',e=>{mob.tier=e.target.value;changeFloorOrTier()});$('mode').addEventListener('change',e=>{
  const next=e.target.value,old=mob.mode;if(next===old)return;
@@ -277,8 +350,9 @@ $('preset').addEventListener('change',e=>{const prior=mob.preset;mob.preset=e.ta
 $('randomize').addEventListener('click',()=>{if(mob.mode==='points'||!['balanced','minmax','custom'].includes(mob.preset))return;fillArray(mob.preset==='custom'?'balanced':mob.preset);render()});
 $('statReference').addEventListener('click',()=>{$('referencePanel').hidden=false});
 $('closeReference').addEventListener('click',()=>{$('referencePanel').hidden=true});
-$('resetDefaults').addEventListener('click',()=>{setTierDefaults();undo=[];render()});for(const field of ['maxHB','dr'])$(field).addEventListener('change',e=>{mob[field]=Math.max(field==='maxHB'?1:0,Math.trunc(+e.target.value||0));render()});$('conThreshold').addEventListener('change',e=>{mob.conThreshold=Math.max(1,Math.trunc(+e.target.value||1));render()});$('damageOne').addEventListener('click',()=>{mob.currentHB=Math.max(0,mob.currentHB-1);render()});$('healOne').addEventListener('click',()=>{mob.currentHB=Math.min(mob.maxHB,mob.currentHB+1);render()});$('fullHeal').addEventListener('click',()=>{mob.currentHB=mob.maxHB;render()});for(const field of ['bypass','ignoreDR'])$(field).addEventListener('input',calc);$('ignoreDR').addEventListener('change',()=>{$('bypass').disabled=$('ignoreDR').checked;calc()});function resetHit(){hitComponents=[{type:'',damage:'',modifier:'auto'}];renderHitDamageType();renderDamageComponents();$('bypass').value=0;$('ignoreDR').checked=false;$('bypass').disabled=false;calc()}$('resetHit').addEventListener('click',resetHit);$('applyDamage').addEventListener('click',()=>{const lost=calc();if(lost===null)return;if(lost<=0){resetHit();return}undo.push(mob.currentHB);mob.currentHB=Math.max(0,mob.currentHB-lost);resetHit();render()});$('undoDamage').addEventListener('click',()=>{if(!undo.length)return;mob.currentHB=undo.pop();render()});$('newCreature').addEventListener('click',()=>{if(!confirm('Start a new creature? Export your current creature first if you want to keep it.'))return;mob=make();undo=[];resetHit();fillArray();render();restoreWorkshopLayout()});$('export').addEventListener('click',()=>{const blob=new Blob([JSON.stringify({app:'jackalforge-gm-workshop',version:1,creature:mob},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(mob.name.trim().replace(/[^a-z0-9-]/gi,'-')||'creature')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)});$('import').addEventListener('click',()=>$('importFile').click());$('importFile').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;try{const data=JSON.parse(await file.text());if(data.app!=='jackalforge-gm-workshop'||!data.creature)throw Error('Not a GM Workshop export');if(!confirm('Replace the current creature with this import?'))return;mob={...make(),...data.creature};if(!Array.isArray(mob.resistances))mob.resistances=[];if(!Array.isArray(mob.vulnerabilities))mob.vulnerabilities=[];if(!Array.isArray(mob.attacks))mob.attacks=[];if(!Array.isArray(mob.abilities))mob.abilities=[];undo=[];resetHit();render();restoreWorkshopLayout()}catch(err){alert('Import failed: '+err.message)}finally{e.target.value=''}});
-if(!Array.isArray(mob.resistances))mob.resistances=[];if(!Array.isArray(mob.vulnerabilities))mob.vulnerabilities=[];if(!mob.preset)mob.preset='balanced';if(mob.mode==='array')mob.mode='mods';if(!localStorage.getItem(KEY))fillArray();render();
+for(const field of ['maxHB','dr'])$(field).addEventListener('change',e=>{mob[field]=Math.max(field==='maxHB'?1:0,Math.trunc(+e.target.value||0));render()});$('conThreshold').addEventListener('change',e=>{mob.conThreshold=Math.max(1,Math.trunc(+e.target.value||1));render()});$('damageOne').addEventListener('click',()=>{mob.currentHB=Math.max(0,mob.currentHB-1);render()});$('healOne').addEventListener('click',()=>{mob.currentHB=Math.min(mob.maxHB,mob.currentHB+1);render()});$('fullHeal').addEventListener('click',()=>{mob.currentHB=mob.maxHB;render()});for(const field of ['bypass','ignoreDR'])$(field).addEventListener('input',calc);$('ignoreDR').addEventListener('change',()=>{$('bypass').disabled=$('ignoreDR').checked;calc()});function resetHit(){hitComponents=[{type:'',damage:'',modifier:'auto'}];renderHitDamageType();renderDamageComponents();$('bypass').value=0;$('ignoreDR').checked=false;$('bypass').disabled=false;calc()}$('resetHit').addEventListener('click',resetHit);$('applyDamage').addEventListener('click',()=>{const lost=calc();if(lost===null)return;if(lost<=0){resetHit();return}undo.push(mob.currentHB);mob.currentHB=Math.max(0,mob.currentHB-lost);resetHit();render()});$('undoDamage').addEventListener('click',()=>{if(!undo.length)return;mob.currentHB=undo.pop();render()});function createNewCreature(){const next=make();addCreature(next);fillArray();render()}
+$('export').addEventListener('click',()=>{const blob=new Blob([JSON.stringify({app:'jackalforge-gm-workshop',version:1,creature:mob},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(mob.name.trim().replace(/[^a-z0-9-]/gi,'-')||'creature')+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)});$('import').addEventListener('click',()=>$('importFile').click());$('importFile').addEventListener('change',async e=>{const file=e.target.files[0];if(!file)return;try{const data=JSON.parse(await file.text());if(data.app!=='jackalforge-gm-workshop'||!data.creature)throw Error('Not a GM Workshop export');if(!confirm('Import this as a NEW creature in your library? Your existing creatures will be kept.'))return;addCreature(data.creature);if(!Array.isArray(mob.resistances))mob.resistances=[];if(!Array.isArray(mob.vulnerabilities))mob.vulnerabilities=[];if(!Array.isArray(mob.attacks))mob.attacks=[];if(!Array.isArray(mob.abilities))mob.abilities=[];undo=[];resetHit();render();restoreWorkshopLayout()}catch(err){alert('Import failed: '+err.message)}finally{e.target.value=''}});
+if(!Array.isArray(mob.resistances))mob.resistances=[];if(!Array.isArray(mob.vulnerabilities))mob.vulnerabilities=[];if(!mob.preset)mob.preset='balanced';if(mob.mode==='array')mob.mode='mods';if(!mob.name&&!mob.attacks.length&&!mob.abilities.length&&mob.mods.every(x=>x===1))fillArray();render();
 
 // v0.6 — attack and ability editors, adapted from Character Sheet.
 // Monster To Hit is a FIXED DC: 10 + chosen stat modifier + floor + adjustment.
@@ -303,16 +377,16 @@ function editorValues(kind){const map=kind==='attacks'?attackMap:abilityMap;retu
 function updateEditorPreview(){if(editorKind==='attacks'){const a=editorValues('attacks');$('attackPreview').textContent=`To Hit: DC ${attackDC(a)} (10 + ${a.hitStat} Mod + Floor${Number(a.dcBonus)?' + adjustment':''}) · Damage: ${damageDisplay(a)}`;}else{const a=editorValues('abilities');$('abilityPreview').textContent=a.stat?`Save DC: ${abilityDC(a)} (10 + ${a.stat} Mod + Floor${Number(a.dcBonus)?' + adjustment':''})`:'No stat-based DC selected.'}}
 function openWorkshopEditor(kind,id=null){editorKind=kind;editorId=id;const entry=(mob[kind]||[]).find(a=>a.id===id);const map=kind==='attacks'?attackMap:abilityMap;const defaults=kind==='attacks'?{hitStat:'STR',damageStat:'linked',damageDice:`${diceCount(mob.floor)}${mob.die}`,dcBonus:0,damageBonus:0}:{type:'Active',dcBonus:0};
  for(const [key,field] of Object.entries(map))$(field).value=entry?.[key]??defaults[key]??'';
- $('attackEditor').hidden=kind!=='attacks';$('abilityEditor').hidden=kind!=='abilities';$('editorTitle').textContent=(entry?'EDIT ':'NEW ')+(kind==='attacks'?'ATTACK':'ABILITY');
+ $('entryKind').value=kind;$('attackEditor').hidden=kind!=='attacks';$('abilityEditor').hidden=kind!=='abilities';$('editorTitle').textContent=(entry?'EDIT ':'NEW ')+(kind==='attacks'?'ATTACK':'ABILITY');
  $(kind==='attacks'?'duplicateAttack':'duplicateAbility').hidden=!entry;$(kind==='attacks'?'deleteAttack':'deleteAbility').hidden=!entry;
  $('workshopOverlay').hidden=false;$('workshopSidebar').hidden=false;updateEditorPreview();}
 function closeWorkshopEditor(){$('workshopOverlay').hidden=true;$('workshopSidebar').hidden=true;editorId=null}
-$('addAttackButton').addEventListener('click',()=>openWorkshopEditor('attacks'));
-$('addAbilityButton').addEventListener('click',()=>openWorkshopEditor('abilities'));
+$('addEntryButton').addEventListener('click',()=>openWorkshopEditor('attacks'));
+$('entryKind').addEventListener('change',e=>{const next=e.target.value;if(next===editorKind)return;const prior=editorValues(editorKind);const oldKind=editorKind,oldId=editorId;openWorkshopEditor(next,oldId);if(oldKind!==next){$(next==='attacks'?'attackName':'abilityName').value=prior.name||'';$(next==='attacks'?'attackEffects':'abilityEffects').value=prior.effects||'';}editorId=oldId;});
 $('closeWorkshopSidebar').addEventListener('click',closeWorkshopEditor);$('workshopOverlay').addEventListener('click',closeWorkshopEditor);
 for(const kind of ['attacks','abilities']){
  const form=$(kind==='attacks'?'attackEditor':'abilityEditor');form.addEventListener('input',updateEditorPreview);form.addEventListener('change',updateEditorPreview);
- form.addEventListener('submit',e=>{e.preventDefault();const values=editorValues(kind);if(!values.name.trim())return;const existing=(mob[kind]||[]).find(a=>a.id===editorId);if(existing)Object.assign(existing,values);else mob[kind].push({id:crypto.randomUUID(),...values});save();renderAttacksAndAbilities();closeWorkshopEditor()});
+ form.addEventListener('submit',e=>{e.preventDefault();const values=editorValues(kind);if(!values.name.trim())return;const other=kind==='attacks'?'abilities':'attacks';const moved=(mob[other]||[]).find(a=>a.id===editorId);if(moved)mob[other]=mob[other].filter(a=>a.id!==editorId);const existing=(mob[kind]||[]).find(a=>a.id===editorId);if(existing)Object.assign(existing,values);else mob[kind].push({id:editorId||crypto.randomUUID(),...values});save();renderAttacksAndAbilities();closeWorkshopEditor()});
  $(kind==='attacks'?'duplicateAttack':'duplicateAbility').addEventListener('click',()=>{const original=mob[kind].find(a=>a.id===editorId);if(!original)return;const copy={...original,id:crypto.randomUUID(),name:original.name+' (Copy)'};mob[kind].push(copy);save();renderAttacksAndAbilities();openWorkshopEditor(kind,copy.id)});
  $(kind==='attacks'?'deleteAttack':'deleteAbility').addEventListener('click',()=>{if(!editorId||!confirm('Delete this '+(kind==='attacks'?'attack':'ability')+'?'))return;mob[kind]=mob[kind].filter(a=>a.id!==editorId);save();renderAttacksAndAbilities();closeWorkshopEditor()});
 }
@@ -335,25 +409,34 @@ function renderGMNotes(){
   const row=document.createElement('article');row.className='gm-note'+(note.hidden?' note-is-hidden':'');
   const head=document.createElement('div');head.className='gm-note-head';
   const title=document.createElement('button');title.type='button';title.className='gm-note-title';title.textContent=(note.pinned?'📌 ':'')+(note.title||'Untitled');title.addEventListener('click',()=>openNoteEditor(note.id));head.append(title);
-  const actions=document.createElement('div');actions.className='gm-note-actions';
-  const pin=document.createElement('button');pin.type='button';pin.textContent=note.pinned?'UNPIN':'PIN';pin.setAttribute('aria-label',note.pinned?'Unpin note':'Pin note');pin.addEventListener('click',()=>{note.pinned=!note.pinned;save();renderGMNotes()});actions.append(pin);
-  const hide=document.createElement('button');hide.type='button';hide.textContent=note.hidden?'SHOW':'HIDE';hide.addEventListener('click',()=>{note.hidden=!note.hidden;save();renderGMNotes()});actions.append(hide);
-  const edit=document.createElement('button');edit.type='button';edit.textContent='EDIT';edit.addEventListener('click',()=>openNoteEditor(note.id));actions.append(edit);
-  head.append(actions);row.append(head);
+  row.append(head);
   if(note.body){const body=document.createElement('p');body.className='gm-note-body';body.textContent=note.body;row.append(body)}
   root.append(row);
  }
 }
-function openNoteEditor(id=null){
- editingNoteId=id;const note=mob.gmNotes.find(n=>n.id===id);
- $('noteEditorTitle').textContent=note?'EDIT GM NOTE':'NEW GM NOTE';
- $('noteTitle').value=note?.title||'';$('noteBody').value=note?.body||'';
- $('notePinned').checked=!!note?.pinned;$('noteHidden').checked=!!note?.hidden;
- $('deleteNote').hidden=!note;$('noteOverlay').hidden=false;$('noteSidebar').hidden=false;
- $('noteTitle').focus();
+function noteSidebarAction(label,fn,cls=''){
+ const btn=document.createElement('button');btn.type='button';btn.textContent=label;if(cls)btn.className=cls;btn.addEventListener('click',fn);$('noteReadActions').append(btn);
+}
+function openNoteEditor(id,edit=false){
+ const note=mob.gmNotes.find(n=>n.id===id);if(!note)return;
+ editingNoteId=id;$('noteEditorTitle').textContent=edit?'EDIT GM NOTE':(note.title||'Untitled Note');
+ $('noteTitle').value=note.title||'';$('noteBody').value=note.body||'';
+ $('noteReadView').hidden=edit;$('noteEditor').hidden=!edit;
+ $('noteReadBody').textContent=note.body||'';$('noteReadActions').replaceChildren();
+ if(!edit){
+  noteSidebarAction('EDIT',()=>openNoteEditor(id,true),'note-edit');
+  noteSidebarAction(note.pinned?'UNPIN':'PIN',()=>{note.pinned=!note.pinned;save();renderGMNotes();openNoteEditor(id)});
+  noteSidebarAction(note.hidden?'SHOW':'HIDE',()=>{note.hidden=!note.hidden;save();renderGMNotes();openNoteEditor(id)});
+  noteSidebarAction('DUPLICATE',()=>{const copy={...note,id:crypto.randomUUID(),title:(note.title||'Untitled Note')+' (Copy)',hidden:false};mob.gmNotes.push(copy);save();renderGMNotes();openNoteEditor(copy.id)});
+  noteSidebarAction('DELETE',()=>{if(!confirm('Delete this GM note?'))return;mob.gmNotes=mob.gmNotes.filter(n=>n.id!==id);save();renderGMNotes();closeNoteEditor()},'note-delete');
+ }
+ $('deleteNote').hidden=!edit;$('noteOverlay').hidden=false;$('noteSidebar').hidden=false;
+ if(edit)$('noteTitle').focus();
 }
 function closeNoteEditor(){$('noteOverlay').hidden=true;$('noteSidebar').hidden=true;editingNoteId=null}
-$('addNoteButton').addEventListener('click',()=>openNoteEditor());
+$('addNoteButton').addEventListener('click',()=>{const panel=document.querySelector('[data-workshop-section="notes"]');const body=panel?.querySelector('.workshop-section-body');if(body?.hidden){body.hidden=false;panel.classList.remove('is-collapsed');const toggle=panel.querySelector('.section-move-buttons button:last-child');if(toggle)toggle.textContent='− Collapse';storeWorkshopLayout()}$('quickNoteForm').hidden=false;$('quickNoteTitle').focus()});
+$('cancelQuickNote').addEventListener('click',()=>{$('quickNoteForm').reset();$('quickNoteForm').hidden=true});
+$('quickNoteForm').addEventListener('submit',e=>{e.preventDefault();ensureGMNotes();mob.gmNotes.push({id:crypto.randomUUID(),title:$('quickNoteTitle').value.trim()||'Untitled Note',body:$('quickNoteBody').value,pinned:false,hidden:false});save();renderGMNotes();$('quickNoteForm').reset();$('quickNoteForm').hidden=true});
 $('closeNoteSidebar').addEventListener('click',closeNoteEditor);
 $('noteOverlay').addEventListener('click',closeNoteEditor);
 $('noteSearch').addEventListener('input',renderGMNotes);
@@ -361,7 +444,7 @@ $('showHiddenNotes').addEventListener('change',renderGMNotes);
 $('clearNoteSearch').addEventListener('click',()=>{$('noteSearch').value='';$('showHiddenNotes').checked=false;renderGMNotes()});
 $('noteEditor').addEventListener('submit',e=>{
  e.preventDefault();const title=$('noteTitle').value.trim();if(!title)return;
- const values={title,body:$('noteBody').value,pinned:$('notePinned').checked,hidden:$('noteHidden').checked};
+ const values={title,body:$('noteBody').value};
  const note=mob.gmNotes.find(n=>n.id===editingNoteId);
  if(note)Object.assign(note,values);else mob.gmNotes.push({id:crypto.randomUUID(),...values});
  save();renderGMNotes();closeNoteEditor();
@@ -375,17 +458,75 @@ function initializeWorkshopSections(){
  const panels=[...document.querySelectorAll('main.wrap > section.panel')];
  panels.forEach((panel,i)=>{const title=panel.querySelector(':scope > .section-title');if(!title)return;const key=panel.dataset.workshopSection||['creature','stats','defenses','notes'][i]||'section'+i;panel.dataset.workshopSection=key;
  const body=document.createElement('div');body.className='workshop-section-body';while(title.nextSibling)body.append(title.nextSibling);panel.append(body);
+ if(key==='creature')return;
  const controls=document.createElement('div');controls.className='section-move-buttons';
  for(const [text,action] of [['↑',-1],['↓',1],['− Collapse',0]]){const btn=document.createElement('button');btn.type='button';btn.textContent=text;btn.title=action===0?'Collapse / expand section':action<0?'Move section up':'Move section down';btn.addEventListener('click',()=>{
   if(action===0){body.hidden=!body.hidden;panel.classList.toggle('is-collapsed',body.hidden);btn.textContent=body.hidden?'+ Expand':'− Collapse';storeWorkshopLayout()}
-  else{const siblings=[...document.querySelectorAll('main.wrap > section.panel')];const index=siblings.indexOf(panel);const target=siblings[index+action];if(!target)return;if(action<0)target.before(panel);else target.after(panel);updateSectionArrows();storeWorkshopLayout()}
+  else{const siblings=[...document.querySelectorAll('main.wrap > section.panel:not([data-workshop-section="creature"])')];const index=siblings.indexOf(panel);const target=siblings[index+action];if(!target)return;if(action<0)target.before(panel);else target.after(panel);updateSectionArrows();storeWorkshopLayout()}
  });controls.append(btn)}title.append(controls);
  });
- const layout=mob.sheetLayout||{};const order=Array.isArray(layout.order)?layout.order:[];const all=[...document.querySelectorAll('main.wrap > section.panel')];order.forEach(key=>{const panel=all.find(p=>p.dataset.workshopSection===key);if(panel)document.querySelector('main.wrap').append(panel)});
- for(const panel of all){const collapsed=Array.isArray(layout.collapsed)&&layout.collapsed.includes(panel.dataset.workshopSection);const body=panel.querySelector('.workshop-section-body');body.hidden=collapsed;panel.classList.toggle('is-collapsed',collapsed);panel.querySelector('.section-move-buttons button:last-child').textContent=collapsed?'+ Expand':'− Collapse'}updateSectionArrows();
+ const layout=mob.sheetLayout||{};const order=Array.isArray(layout.order)?layout.order:[];const all=[...document.querySelectorAll('main.wrap > section.panel')];order.forEach(key=>{const panel=all.find(p=>p.dataset.workshopSection===key);if(panel&&panel.dataset.workshopSection!=='creature')document.querySelector('main.wrap').append(panel)});
+ for(const panel of all){const collapsed=panel.dataset.workshopSection!=='creature'&&Array.isArray(layout.collapsed)&&layout.collapsed.includes(panel.dataset.workshopSection);const body=panel.querySelector('.workshop-section-body');body.hidden=collapsed;panel.classList.toggle('is-collapsed',collapsed);panel.querySelector('.section-move-buttons button:last-child')&&(panel.querySelector('.section-move-buttons button:last-child').textContent=collapsed?'+ Expand':'− Collapse')}document.querySelector('main.wrap').prepend(document.querySelector('[data-workshop-section="creature"]'));updateSectionArrows();
 }
-function updateSectionArrows(){const panels=[...document.querySelectorAll('main.wrap > section.panel')];panels.forEach((p,i)=>{const buttons=p.querySelectorAll('.section-move-buttons button');buttons[0].disabled=i===0;buttons[1].disabled=i===panels.length-1})}
+function updateSectionArrows(){const panels=[...document.querySelectorAll('main.wrap > section.panel:not([data-workshop-section="creature"])')];panels.forEach((p,i)=>{const buttons=p.querySelectorAll('.section-move-buttons button');buttons[0].disabled=i===0;buttons[1].disabled=i===panels.length-1})}
 function storeWorkshopLayout(){mob.sheetLayout={order:[...document.querySelectorAll('main.wrap > section.panel')].map(p=>p.dataset.workshopSection),collapsed:[...document.querySelectorAll('main.wrap > section.panel')].filter(p=>p.querySelector('.workshop-section-body')?.hidden).map(p=>p.dataset.workshopSection)};save()}
-function restoreWorkshopLayout(){const panels=[...document.querySelectorAll('main.wrap > section.panel')];const layout=mob.sheetLayout||{};const host=document.querySelector('main.wrap');(layout.order||[]).forEach(key=>{const panel=panels.find(p=>p.dataset.workshopSection===key);if(panel)host.append(panel)});panels.forEach(p=>{const hidden=(layout.collapsed||[]).includes(p.dataset.workshopSection);p.querySelector('.workshop-section-body').hidden=hidden;p.classList.toggle('is-collapsed',hidden);p.querySelector('.section-move-buttons button:last-child').textContent=hidden?'+ Expand':'− Collapse'});updateSectionArrows()}
+function restoreWorkshopLayout(){const panels=[...document.querySelectorAll('main.wrap > section.panel')];const layout=mob.sheetLayout||{};const host=document.querySelector('main.wrap');(layout.order||[]).forEach(key=>{const panel=panels.find(p=>p.dataset.workshopSection===key);if(panel&&panel.dataset.workshopSection!=='creature')host.append(panel)});panels.forEach(p=>{const hidden=p.dataset.workshopSection!=='creature'&&(layout.collapsed||[]).includes(p.dataset.workshopSection);p.querySelector('.workshop-section-body').hidden=hidden;p.classList.toggle('is-collapsed',hidden);p.querySelector('.section-move-buttons button:last-child')&&(p.querySelector('.section-move-buttons button:last-child').textContent=hidden?'+ Expand':'− Collapse')});host.prepend(host.querySelector('[data-workshop-section="creature"]'));updateSectionArrows()}
 if(!Array.isArray(mob.attacks))mob.attacks=[];if(!Array.isArray(mob.abilities))mob.abilities=[];
-initializeWorkshopSections();renderAttacksAndAbilities();renderGMNotes();
+initializeWorkshopSections();renderAttacksAndAbilities();renderGMNotes();renderMobLibrary();
+
+// v0.7 — Character Sheet-style creature landing page.
+$('backToMobLibrary').addEventListener('click',showMobLibrary);
+$('exportEntireMobLibrary').addEventListener('click',()=>{
+ save();const blob=new Blob([JSON.stringify({app:'jackalforge-gm-workshop-library',version:1,creatures:library.creatures},null,2)],{type:'application/json'});
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='jackalforge-mob-library.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+});
+$('importMobLibrary').addEventListener('click',()=>$('importMobLibraryFile').click());
+$('importMobLibraryFile').addEventListener('change',async e=>{
+ const file=e.target.files[0];if(!file)return;
+ try{
+  const parsed=JSON.parse(await file.text());let items=[];
+  if(parsed.app==='jackalforge-gm-workshop-library'&&Array.isArray(parsed.creatures))items=parsed.creatures.map(x=>x.data).filter(Boolean);
+  else if(parsed.app==='jackalforge-gm-workshop'&&parsed.creature)items=[parsed.creature];
+  else throw Error('Not a GM Workshop creature or library export');
+  if(!items.length)throw Error('No creatures in this file');
+  if(!confirm(`Import ${items.length} creature(s) as new entries? Existing creatures will be kept.`))return;
+  save();for(const data of items)library.creatures.push({id:newCreatureId(),data:{...make(),...data}});
+  localStorage.setItem(LIBRARY_KEY,JSON.stringify(library));renderMobLibrary();
+ }catch(err){alert('Import failed: '+err.message)}finally{e.target.value=''}
+});
+showMobLibrary();
+
+// v0.7.2 — per-creature portrait, resized before browser storage.
+function renderCreaturePhoto(){
+ const img=$('creaturePhotoPreview'),placeholder=$('creaturePhotoPlaceholder');
+ if(mob.photo){img.src=mob.photo;img.hidden=false;placeholder.hidden=true}
+ else{img.removeAttribute('src');img.hidden=true;placeholder.hidden=false}
+ $('removeCreaturePhoto').disabled=!mob.photo;
+}
+$('uploadCreaturePhoto').addEventListener('click',()=>$('creaturePhotoFile').click());
+$('creaturePhotoFile').addEventListener('change',e=>{
+ const file=e.target.files?.[0];if(!file)return;
+ if(!['image/jpeg','image/png','image/webp'].includes(file.type)){alert('Choose a JPG, PNG, or WebP image.');e.target.value='';return}
+ const reader=new FileReader();
+ reader.onload=()=>{
+  const img=new Image();
+  img.onload=()=>{
+   const canvas=document.createElement('canvas');
+   const max=420,scale=Math.min(1,max/Math.max(img.naturalWidth,img.naturalHeight));
+   canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));
+   canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
+   canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+   const previous=mob.photo;
+   mob.photo=canvas.toDataURL('image/jpeg',.76);
+   renderCreaturePhoto();save();
+   if($('saveStatus').textContent==='Save unavailable'){
+    mob.photo=previous;renderCreaturePhoto();
+    alert('Image could not be saved. Browser storage may be full. Try a smaller photo.');
+   }
+  };
+  img.onerror=()=>alert('Could not read this image.');
+  img.src=reader.result;
+ };
+ reader.readAsDataURL(file);e.target.value='';
+});
+$('removeCreaturePhoto').addEventListener('click',()=>{mob.photo='';renderCreaturePhoto();save()});
